@@ -6,16 +6,18 @@ RUN apk add --no-cache curl bash git
 RUN xcaddy build \
       --with github.com/steffenbusch/caddy-basicauth-totp
 
-# ---------- generate Cloudflare matcher snippet ----------
+# ---------- create Cloudflare matcher snippet -------------
 RUN mkdir -p /etc/caddy/snippets && \
+    curl -sS https://www.cloudflare.com/ips-v4 -o /tmp/cf4 && \
+    curl -sS https://www.cloudflare.com/ips-v6 -o /tmp/cf6 && \
     { \
       echo "(cf_only) {"; \
       echo -n "    @from_cf remote_ip "; \
-      curl -sS https://www.cloudflare.com/ips-v4 https://www.cloudflare.com/ips-v6 \
-        | tr '\n' ' '; \
+      cat /tmp/cf4 /tmp/cf6 | xargs echo -n;   # ← every newline -> one space
       echo; \
       echo "}"; \
-    } > /etc/caddy/snippets/cf_only.caddy
+    } > /etc/caddy/snippets/cf_only.caddy && \
+    rm /tmp/cf4 /tmp/cf6
 
 # ---------- runtime ----------
 FROM caddy:alpine
