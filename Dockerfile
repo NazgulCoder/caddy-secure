@@ -1,24 +1,28 @@
 # ---------- builder ----------
 FROM caddy:builder-alpine AS builder
+RUN apk add --no-cache git wget
 
-#  pull Coraza, Salmi WAF, TOTP, Cloudflare-IP
+# Clone the WAF repo (1 depth = faster)
+RUN git clone --depth 1 https://github.com/fabriziosalmi/caddy-waf /wafsrc
+
+# Build Caddy with three plugins:
+#   • Salmi WAF  • BasicAuth-TOTP  • Cloudflare-IP
 RUN xcaddy build \
-      --with github.com/corazawaf/coraza-caddy@latest \
-      --with github.com/fabriziosalmi/caddy-waf@latest \
-      --with github.com/steffenbusch/caddy-basicauth-totp@latest \
-      --with github.com/WeidiDeng/caddy-cloudflare-ip/v2@latest
+      --with github.com/fabriziosalmi/caddy-waf=/wafsrc \
+      --with github.com/steffenbusch/caddy-basicauth-totp \
+      --with github.com/WeidiDeng/caddy-cloudflare-ip/v2
 
-#  Copy OWASP CRS into the image (v4.0.0 today)
-ADD https://github.com/coreruleset/coreruleset/archive/refs/tags/v4.0.0.tar.gz /tmp/crs.tar.gz
-RUN mkdir -p /opt/owasp_crs && \
-    tar -xf /tmp/crs.tar.gz --strip-components=1 -C /opt/owasp_crs && \
-    rm /tmp/crs.tar.gz
+# Grab the GeoLite2 Country DB (for GeoIP rules)
+RUN mkdir -p /opt/geoip     \
+ && wget -qO /opt/geoip/GeoLite2-Country.mmdb \
+      https://git.io/GeoLite2-Country.mmdb
 
 # ---------- runtime ----------
 FROM caddy:alpine
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
-COPY Caddyfile /etc/caddy/Caddyfile
-COPY --from=builder /opt/owasp_crs /opt/owasp_crs    # CRS rules
+COPY --from=builder /opt/geoip /opt/geoip                # GeoIP DB
+COPY Caddyfile       /etc/caddy/Caddyfile
+COPY rules.json      /etc/caddy/waf/rules.json           # sample rules
 VOLUME ["/data", "/config"]
 EXPOSE 80 443
 ENTRYPOINT ["caddy","run","--adapter","caddyfile","--config","/etc/caddy/Caddyfile"]
