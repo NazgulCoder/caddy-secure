@@ -2,7 +2,7 @@
 FROM caddy:builder-alpine AS builder
 RUN xcaddy build \
       --with github.com/steffenbusch/caddy-basicauth-totp \
-      --with github.com/WeidiDeng/caddy-cloudflare-ip/v2
+      --with github.com/WeidiDeng/caddy-cloudflare-ip/
 
 # ---------- runtime ----------
 FROM caddy:alpine
