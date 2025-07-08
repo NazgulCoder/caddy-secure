@@ -2,18 +2,19 @@
 FROM caddy:builder-alpine AS builder
 RUN apk add --no-cache curl bash git
 
-# Build Caddy with one plugin only (BasicAuth-TOTP, latest commit)
+# Build Caddy (latest BasicAuth-TOTP, no version pin)
 RUN xcaddy build \
       --with github.com/steffenbusch/caddy-basicauth-totp
 
-# Grab Cloudflare CIDRs and turn them into a snippet
+# ---------- create Cloudflare matcher snippet -------------
 RUN mkdir -p /etc/caddy/snippets && \
-    curl -sS https://www.cloudflare.com/ips-v4 -o /tmp/cf4 && \
-    curl -sS https://www.cloudflare.com/ips-v6 -o /tmp/cf6 && \
-    { printf "(cf_only) {\n    @from_cf remote_ip"; cat /tmp/cf4 /tmp/cf6; \
-      printf "\n}\n"; } | tr '\n' ' ' | sed 's/ $/\n/' \
-      > /etc/caddy/snippets/cf_only.caddy && \
-    rm /tmp/cf4 /tmp/cf6
+    { \
+      echo "(cf_only) {"; \
+      echo "    @from_cf remote_ip"; \
+      curl -sS https://www.cloudflare.com/ips-v4 https://www.cloudflare.com/ips-v6 | \
+        while read cidr; do echo "        ${cidr}"; done; \
+      echo "}"; \
+    } > /etc/caddy/snippets/cf_only.caddy
 
 # ---------- runtime ----------
 FROM caddy:alpine
