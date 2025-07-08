@@ -13,7 +13,9 @@ curl -sS https://www.cloudflare.com/ips-v4 -o /tmp/cf4; \
 curl -sS https://www.cloudflare.com/ips-v6 -o /tmp/cf6; \
 { \
 printf '(cf_only) {\n @from_cf remote_ip '; \
-cat /tmp/cf4 /tmp/cf6 | tr '\n' ' '; \
+cat /tmp/cf4 | tr '\n' ' '; \
+printf ' '; \
+cat /tmp/cf6 | tr '\n' ' '; \
 printf '\n}\n'; \
 } > /etc/caddy/snippets/cf_only.caddy; \
 rm /tmp/cf4 /tmp/cf6
