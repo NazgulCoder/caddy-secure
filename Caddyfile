@@ -1,106 +1,154 @@
-########################################
+############################################
 #  GLOBAL OPTIONS
-########################################
+############################################
 {
-    # E-mail for ACME renewal notices
-    email you@example.com
-
-    # Real client IPs even when Cloudflare is in front
-    servers {
-        trusted_proxies cloudflare
-        client_ip_headers CF-Connecting-IP X-Forwarded-For
-    }
+    email YOUREMAIL@EMAIL.com
+    auto_https disable_redirects
 }
 
-########################################
-#  MACROS (re-usable snippets)
-########################################
-
-# 1) Cloudflare headers (import wherever you reverse-proxy)
+############################################
+#  SNIPPETS
+############################################
 (cf_headers) {
     header_up X-Real-IP        {http.request.header.CF-Connecting-IP}
     header_up X-Forwarded-For  {http.request.header.CF-Connecting-IP}
     header_up CF-Connecting-IP {http.request.header.CF-Connecting-IP}
 }
 
-# 2) Coraza WAF (full OWASP Core Rule Set, blocking mode)
-(waf) {
-    order coraza_waf first          # must run before anything else!
-    coraza_waf {
-        load_owasp_crs
-        directives `
-          Include @coraza.conf-recommended
-          Include @crs-setup.conf.example
-          Include @owasp_crs/*.conf
-          SecRuleEngine On          # "On" = detect + block (403)
-        `
+############################################
+#  EXTRA MATCHER FOR CLOUDFLARE
+############################################
+import /etc/caddy/snippets/cf_only.caddy
+
+(auth_admin) {
+    basic_auth {
+        admin YOUR_HASHED_PASSWORD
+    }
+
+    basic_auth_totp {
+        # JSON file with the secrets
+        secrets_file_path /data/totp-secrets.json
+
+        # 32-byte base-64 key for the JWT cookie
+        sign_key YOUR_SIGN_KEY
+
+        # Optional tweaks
+        session_inactivity_timeout 2h   # default 60m
     }
 }
 
-# 3) Auth portal (login UI + TOTP)
-(auth_portal) {
-    auth_portal {
-        path /                         # portal lives at /
-        ui {
-            title "Secure Login"
-            theme basic
-        }
+############################################
+#  PUBLIC SITES 
+#- CLOUDFLARE SSL FLEXIBLE
+############################################
+http://YOURWEBSITE.COM {
+    reverse_proxy http://IP:PORT {
+        import cf_headers
+    }
+}
 
-        # Single backend = local JSON file stored in /data/users.json
-        backends {
-            local {
-                method local
-                path   /data/users.json
-                realm  local
+############################################
+#  PUBLIC SITES 
+#- CLOUDFLARE SSL FLEXIBLE
+#- ONLY ACCESSIBLE FROM CLOUDFLARE IPS
+############################################
+http://YOURWEBSITE.COM {
+    import cf_only         # defines @from_cf matcher
+    # 1️⃣ traffic that *arrives from Cloudflare* → OK
+    handle @from_cf {
+        reverse_proxy http://IP:PORT {
+            import cf_headers
+        }
+    }
+    # 2️⃣ everything else → 403
+    handle {
+        respond "Direct access forbidden (use DNS via Cloudflare)" 403
+    }
+}
+
+############################################
+#  PUBLIC SITES (UBIQUITI UNIFI CONTROLLER EXAMPLE WITH CADDY AS A REVERSE PROXY)
+#- CLOUDFLARE SSL FLEXIBLE
+#- 2-FA-PROTECTED SITES
+#- GZIP COMPRESSION
+#- WEBSOCKET SUPPORT
+#- SKIP TLS INVALID CERTIFICATE (FROM UNIFI CONTAINER)
+############################################
+http://unifi.YOURWEBSITE.COM {
+    encode gzip zstd
+    import auth_admin
+    reverse_proxy https://IP:8443 {
+        import cf_headers
+        header_up -Authorization
+        header_up Upgrade {http.request.header.Upgrade}
+        header_up Connection {http.request.header.Connection}
+        transport http {
+            tls_insecure_skip_verify
+        }
+    }
+}
+
+############################################
+#  PUBLIC SITES 
+#  ANOTHER EXAMPLE OF WEBSOCKET SUPPORT, UI AND WEBSOCKET RUNNING ON DIFFERENT PORTS
+############################################
+http://YOURWEBSITE.COM {
+    import auth_admin
+
+    @websocket {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    handle @websocket {
+        reverse_proxy http://IP:8080 {
+            import cf_headers
+            header_up Host {host}
+            header_up Upgrade {http.request.header.Upgrade}
+            header_up Connection {http.request.header.Connection}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+    handle {
+        reverse_proxy http://IP:8090 {
+            import cf_headers
+            header_up -Authorization
+            header_up Host {host}
+            header_up X-Forwarded-Proto {scheme}
+            header_down Set-Cookie (.*) "$1; Path=/; Secure; SameSite=Lax"
+        }
+    }
+}
+
+############################################
+#  PUBLIC SITES - (UBIQUITI UNIFI CONTROLLER EXAMPLE WITH CADDY AS A REVERSE PROXY)
+#- SSL HANDLED BY CADDY (CAN USE CLOUDFLARE STRICT MODE)
+#- GZIP COMPRESSION
+#- WEBSOCKET SUPPORT
+#- SKIP TLS INVALID CERTIFICATE
+############################################
+https://unifi.YOURWEBSITE.COM {
+    encode gzip zstd
+    import auth_admin
+
+    tls {
+        issuer acme {
+            disable_http_challenge
+        }
+    }
+        reverse_proxy https://IP:8443 {
+            import cf_headers
+            header_up -Authorization
+            header_up Upgrade    {http.request.header.Upgrade}
+            header_up Connection {http.request.header.Connection}
+            transport http {
+                tls_insecure_skip_verify
             }
         }
-
-        # Google-Authenticator / Authy compatible TOTP
-        totp {
-            issuer "My-Apps"
-            period 30   # seconds
-            skew   1    # ±1 period allowed
-        }
     }
-}
 
-# 4) Require authentication macro
-(require_auth) {
-    route * {
-        authenticate {
-            primary yes        # 401 if not logged-in
-        }
-    }
-}
-
-########################################
-#  SITES
-########################################
-
-# --- 4a  The portal itself --------------------------------
-auth.example.com {
-    import auth_portal
-    # Nothing else here – Caddy serves the UI itself
-}
-
-# --- 4b  A protected backend ------------------------------
-https://private.example.com {
-    import waf
-    import require_auth
-    reverse_proxy http://172.29.100.61:80 {
-        import cf_headers
-    }
-}
-
-# --- 4c  A public site that still gets WAF ----------------
-https://blog.example.com {
-    import waf
-    reverse_proxy http://172.29.100.62:80 {
-        import cf_headers
-    }
-}
-
-# --- 4d  Catch-all block (optional hard fail) -------------
+############################################
+#  CATCH-ALL
+############################################
 :80, :443 {
-    respond "Connection refused" 403
+    respond "Connection Refused" 403
 }
