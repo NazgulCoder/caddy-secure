@@ -2,7 +2,9 @@
 FROM caddy:builder-alpine AS builder
 RUN xcaddy build \
       --with github.com/greenpau/caddy-security \
-      --with github.com/corazawaf/coraza-caddy
+      --with github.com/corazawaf/coraza-caddy \
+      --with github.com/steffenbusch/caddy-basicauth-totp \
+      --with github.com/WeidiDeng/caddy-cloudflare-ip
 # `xcaddy` pulls the most-recent Caddy release and HEAD of every plugin ﻿:contentReference[oaicite:0]{index=0}
 
 # ---------- runtime ----------
