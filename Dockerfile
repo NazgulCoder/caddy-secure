@@ -1,8 +1,8 @@
 # ---------- builder ----------
 FROM caddy:builder-alpine AS builder
 RUN xcaddy build \
-      --with github.com/steffenbusch/caddy-basicauth-totp@latest \
-      --with github.com/WeidiDeng/caddy-cloudflare-ip/v2@latest
+      --with github.com/steffenbusch/caddy-basicauth-totp \
+      --with github.com/WeidiDeng/caddy-cloudflare-ip/v2
 
 # ---------- runtime ----------
 FROM caddy:alpine
