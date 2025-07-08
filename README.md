@@ -15,6 +15,19 @@ Originally built for personal use, this project is open to suggestions and contr
 - **Multi-Stage Build**: Keeps the final Docker image minimal and secure.
 - **Customizable**: Mount your own `Caddyfile` and use the included Cloudflare snippet for advanced configurations.
 
+## Quick Start 💻
+To start using **caddy-secure** you can build the image by yourself or you can use my pre-made image with this simple code.
+```
+$ docker pull ghcr.io/nazgulcoder/caddy-secure:latest
+```
+
+The persistant volumes you need to map are like vanilla Caddy:
+- **/etc/caddy/Caddyfile**
+- **/data**
+- **/config**
+
+Additionally, you can map the **totp-secrets.json**. If you use my Caddyfile as example, just map **/data/totp-secrets.json**
+
 ## Roadmap 🛣️
 
 Here’s what’s planned for future releases:
@@ -29,8 +42,8 @@ Here’s what’s planned for future releases:
 
 ## Functional Caddyfile Sample 📄
 
-_Coming soon!_  
-A ready-to-use, secure Caddyfile example will be provided in future updates. Stay tuned!
+A ready-to-use, secure [Caddyfile](https://raw.githubusercontent.com/NazgulCoder/caddy-secure/refs/heads/main/Caddyfile) reference to start building your own configuration. This includes many examples with tested configurations for many use cases and applications (e.g. UniFi Network Controller etc.)
+
 
 ## Get Involved 🤝
 
