@@ -12,6 +12,7 @@ Originally built for personal use, this project is open to suggestions and contr
 - **Caddy v2**: A modern, fast, and extensible web server.
 - **BasicAuth-TOTP Plugin**: Adds two-factor authentication (TOTP) to HTTP Basic Auth for admin endpoints.
 - **Cloudflare Trusted Proxy Snippet**: Automatically generates a Caddy snippet with up-to-date Cloudflare IP ranges, making it easy to restrict access or set up trusted proxies.
+- **Block Bad IPs**: Automatically Block Bad IPs from Maltrail IP List.
 - **Multi-Stage Build**: Keeps the final Docker image minimal and secure.
 - **Customizable**: Mount your own `Caddyfile` and use the included Cloudflare snippet for advanced configurations.
 
@@ -26,7 +27,13 @@ The persistant volumes you need to map are like vanilla Caddy:
 - **/data**
 - **/config**
 
-Additionally, you can map the **totp-secrets.json**. If you use my Caddyfile as example, just map **/data/totp-secrets.json**
+Additionally, you can map the **totp-secrets.json**. If you use my Caddyfile as example, just map **/data/totp-secrets.json**.
+
+If you want to use my custom Block Bad IPs you need to map also in the container **/etc/caddy/snippets/deny_ips.caddy**, on the host if you don't touch anything bind it read-only **/opt/Caddy/deny_ips.caddy**
+
+If you want to use my custom block bad IPs with Cloudflare, you need to set a Cronjob at **caddy-ipsum-blocklist.sh**. If you don't use Cloudflare it is recommended to use IPTables and therefore use **update-ipsum-blocklist.sh**
+
+Why not implement it automatically in the Dockerfile like Cloudflare IP List? Simple, Cloudflare IP list rarely changes, while Maltrail IP list changes daily, it is definitely better to automatic update the IP list only, and not the entire container, then pre-load the list on Caddy by restarting it. If you want to use other lists feel free to do so, just remember to restart Caddy service (NO HOTSWAP).
 
 ## Roadmap 🛣️
 
@@ -35,6 +42,7 @@ Here’s what’s planned for future releases:
 - [x] **BasicAuth-TOTP support** for 2FA on admin endpoints
 - [x] **Cloudflare IP snippet** custom auto-generation
 - [x] **Multi-stage Docker build** for a minimal image
+- [x] **Block Bad IPs** with daily Cronjob
 - [ ] **Crowdsec** for security
 - [ ] **WAF** for security
 - [ ] **More plugins** (suggest your favorites!)
