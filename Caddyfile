@@ -4,7 +4,18 @@
 {
     email YOUREMAIL@EMAIL.com
     auto_https disable_redirects
+
+    # Trust ONLY Cloudflare's proxies, then read CF-Connecting-IP (NEEDED FOR JWT AUTH)
+    servers {
+        import /etc/caddy/snippets/trusted_proxies.caddy
+        client_ip_headers CF-Connecting-IP
+    }
 }
+
+############################################
+#  Block-list generated every night by IPsum
+import /etc/caddy/snippets/deny_ips.caddy
+############################################
 
 ############################################
 #  SNIPPETS
@@ -51,8 +62,10 @@ http://YOURWEBSITE.COM {
 #  PUBLIC SITES 
 #- CLOUDFLARE SSL FLEXIBLE
 #- ONLY ACCESSIBLE FROM CLOUDFLARE IPS
+#- BLOCKS BAD IPS
 ############################################
 http://YOURWEBSITE.COM {
+    import block_ips
     import cf_only         # defines @from_cf matcher
     # 1️⃣ traffic that *arrives from Cloudflare* → OK
     handle @from_cf {
