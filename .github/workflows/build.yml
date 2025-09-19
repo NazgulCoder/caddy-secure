@@ -1,6 +1,6 @@
 name: Build & publish Caddy secure image
 on:
-  push: { branches: [ main ] }
+#  push: { branches: [ main ] }
   schedule:               # daily 02:00 UTC – adjust
     - cron: '0 23 * * 0'
   workflow_dispatch:
