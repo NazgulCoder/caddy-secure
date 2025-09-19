@@ -1,0 +1,20 @@
+name: Cleanup Untagged Images
+on:
+  schedule:
+    - cron: "0 1 1 * *"
+  workflow_dispatch:
+
+jobs:
+  delete-untagged-images:
+    name: Delete Untagged Images
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: bots-house/ghcr-delete-image-action@v1.1.0
+        with:
+          owner: nazgulcoder  
+          name: caddy-secure  
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Keep last 5 untagged images
+          untagged-keep-latest: 5
