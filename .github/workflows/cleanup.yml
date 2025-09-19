@@ -11,10 +11,12 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: bots-house/ghcr-delete-image-action@v1.1.0
+      - uses: actions/delete-package-versions@v5
         with:
-          owner: nazgulcoder  
-          name: caddy-secure  
+          owner: nazgulcoder
+          package-name: caddy-secure
+          package-type: container
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Keep last 5 untagged images
-          untagged-keep-latest: 5
+          delete-only-untagged-versions: true
+          # Keep only 5 untagged images
+          min-versions-to-keep: 5
