@@ -44,7 +44,7 @@ Here’s what’s planned for future releases:
 - [x] **Multi-stage Docker build** for a minimal image
 - [x] **Block Bad IPs** with daily Cronjob
 - [ ] **Crowdsec** for security
-- [ ] **WAF** for security
+- [x] **Coraza WAF** for security
 - [ ] **More plugins** (suggest your favorites!)
 - [ ] **Automated tests** and CI/CD integration
 
