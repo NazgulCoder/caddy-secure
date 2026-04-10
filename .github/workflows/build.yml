@@ -1,15 +1,88 @@
 name: Build & publish Caddy secure image
+
 on:
-#  push: { branches: [ main ] }
-  schedule:               # daily 02:00 UTC – adjust
-    - cron: '0 23 * * 0'
+  push:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - 'Caddyfile'
+  schedule:
+    - cron: '0 23 * * 0'  # Weekly run
   workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Force a rebuild (ignore cache)'
+        type: boolean
+        default: false
 
 env:
+  # MUST be strictly lowercase for Docker registry compatibility
   IMAGE: ghcr.io/nazgulcoder/caddy-secure
+  # Silences GitHub Actions Node 20 deprecation warnings
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  check-updates:
+    name: Check Dependencies
+    runs-on: ubuntu-latest
+    outputs:
+      should-build: ${{ steps.eval.outputs.build }}
+      state-hash: ${{ steps.eval.outputs.hash }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Calculate Dynamic State Hash
+        id: hash
+        run: |
+          # 1. Hash Cloudflare IPs
+          CF_HASH=$(curl -sS https://www.cloudflare.com/ips-v4 https://www.cloudflare.com/ips-v6 | sha256sum | cut -d' ' -f1)
+          
+          # 2. Hash Caddy Base Image Digest
+          TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/caddy:pull" | jq -r .token)
+          CADDY_DIGEST=$(curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.docker.distribution.manifest.v2+json" "https://registry-1.docker.io/v2/library/caddy/manifests/builder-alpine" | jq -r .config.digest)
+          
+          # 3. BULLETPROOF PARSER: Use native git to find latest commits
+          PLUGINS=$(grep -oE 'github\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+' Dockerfile | sort | uniq | sed 's/github.com\///')
+          PLUGIN_HASH=""
+          
+          for repo in $PLUGINS; do
+            # git ls-remote directly queries the repo without hitting REST API rate limits
+            VER=$(git ls-remote https://github.com/$repo.git HEAD | awk '{print $1}')
+            PLUGIN_HASH="$PLUGIN_HASH-$VER"
+            echo "Found $repo -> $VER"
+          done
+          
+          # Combine everything into one master hash
+          FINAL_HASH=$(echo "$CF_HASH-$CADDY_DIGEST-$PLUGIN_HASH" | sha256sum | cut -d' ' -f1)
+          echo "final_hash=$FINAL_HASH" >> $GITHUB_OUTPUT
+          echo "Combined Hash: $FINAL_HASH"
+
+      - name: Check Cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .build-state
+          key: state-${{ steps.hash.outputs.final_hash }}
+
+      - name: Evaluate Build Need
+        id: eval
+        run: |
+          echo "hash=${{ steps.hash.outputs.final_hash }}" >> $GITHUB_OUTPUT
+          if [[ "${{ github.event_name }}" == "push" ]] || [[ "${{ inputs.force_build }}" == "true" ]]; then
+            echo "build=true" >> $GITHUB_OUTPUT
+            echo "Triggered manually or by code push. Building."
+          elif [[ "${{ steps.cache.outputs.cache-hit }}" == "true" ]]; then
+            echo "build=false" >> $GITHUB_OUTPUT
+            echo "No dependencies changed. Skipping build."
+          else
+            echo "build=true" >> $GITHUB_OUTPUT
+            echo "Upstream dependencies changed! Building."
+          fi
+
   build:
+    name: Build & Push
+    needs: check-updates
+    if: needs.check-updates.outputs.should-build == 'true'
     runs-on: ubuntu-latest
     permissions: { packages: write, contents: read }
     steps:
@@ -21,12 +94,42 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Generate Date Tag
+        id: date
+        run: echo "TAG_DATE=$(date +'%Y.%m.%d')" >> $GITHUB_OUTPUT
+
       - name: Build & push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ env.IMAGE }}:latest
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ steps.date.outputs.TAG_DATE }}
           platforms: linux/amd64,linux/arm64
-          provenance: false   # keep digest stable when code didn’t change
-          sbom: false         # SBOM would add a changing layer
+          provenance: false
+          sbom: false
+
+      - name: Save Cache State
+        run: echo "success" > .build-state
+      - name: Store Cache
+        uses: actions/cache/save@v4
+        with:
+          path: .build-state
+          key: state-${{ needs.check-updates.outputs.state-hash }}
+
+  cleanup:
+    name: Cleanup Untagged Images
+    needs: check-updates
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: { packages: write }
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          owner: nazgulcoder
+          package-name: caddy-secure
+          package-type: container
+          delete-only-untagged-versions: true
+          min-versions-to-keep: 5
