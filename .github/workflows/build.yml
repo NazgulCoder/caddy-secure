@@ -16,7 +16,10 @@ on:
         default: false
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/caddy-secure
+  # MUST be strictly lowercase for Docker registry compatibility
+  IMAGE: ghcr.io/nazgulcoder/caddy-secure
+  # Silences GitHub Actions Node 20 deprecation warnings
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   check-updates:
@@ -39,7 +42,6 @@ jobs:
           CADDY_DIGEST=$(curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.docker.distribution.manifest.v2+json" "https://registry-1.docker.io/v2/library/caddy/manifests/builder-alpine" | jq -r .config.digest)
           
           # 3. BULLETPROOF PARSER: Use native git to find latest commits
-          # This regex specifically captures owner/repo and drops submodules like '/v2' automatically
           PLUGINS=$(grep -oE 'github\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+' Dockerfile | sort | uniq | sed 's/github.com\///')
           PLUGIN_HASH=""
           
@@ -126,7 +128,7 @@ jobs:
     steps:
       - uses: actions/delete-package-versions@v5
         with:
-          owner: ${{ github.repository_owner }}
+          owner: nazgulcoder
           package-name: caddy-secure
           package-type: container
           delete-only-untagged-versions: true
