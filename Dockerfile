@@ -5,7 +5,7 @@ RUN apk add --no-cache curl bash git
 # Build Caddy with plugins and latest commit
 RUN xcaddy build \
       --with github.com/steffenbusch/caddy-basicauth-totp \
-      --with github.com/corazawaf/caddy-coraza
+      --with github.com/corazawaf/coraza-caddy
 
 # ---------- create Cloudflare snippets -------------
 RUN set -e; \
