@@ -5,6 +5,9 @@
     email YOUREMAIL@EMAIL.com
     auto_https disable_redirects
 
+    # CRITICAL: Coraza must inspect traffic before routing
+    order coraza_waf first
+
     # Trust ONLY Cloudflare's proxies, then read CF-Connecting-IP (NEEDED FOR JWT AUTH)
     servers {
         import /etc/caddy/snippets/trusted_proxies.caddy
@@ -24,6 +27,26 @@ import /etc/caddy/snippets/deny_ips.caddy
     header_up X-Real-IP        {http.request.header.CF-Connecting-IP}
     header_up X-Forwarded-For  {http.request.header.CF-Connecting-IP}
     header_up CF-Connecting-IP {http.request.header.CF-Connecting-IP}
+}
+
+(waf) {
+    coraza_waf {
+        load_owasp_crs
+        directives `
+            # 1. Load the recommended engine configuration
+            Include @coraza.conf-recommended
+            
+            # 2. Load the OWASP CRS setup file
+            Include @crs-setup.conf.example
+            
+            # 3. Load all the OWASP security rules
+            Include @owasp_crs/*.conf
+            
+            # 4. Set to 'DetectionOnly' for testing. 
+            #    Change to 'On' when you are ready to block hackers.
+            SecRuleEngine On
+        `
+    }
 }
 
 ############################################
@@ -69,6 +92,29 @@ http://YOURWEBSITE.COM {
     import cf_only         # defines @from_cf matcher
     # 1️⃣ traffic that *arrives from Cloudflare* → OK
     handle @from_cf {
+        reverse_proxy http://IP:PORT {
+            import cf_headers
+        }
+    }
+    # 2️⃣ everything else → 403
+    handle {
+        respond "Direct access forbidden (use DNS via Cloudflare)" 403
+    }
+}
+
+############################################
+#  PUBLIC SITES 
+#- CLOUDFLARE SSL FLEXIBLE
+#- ONLY ACCESSIBLE FROM CLOUDFLARE IPS
+#- BLOCKS BAD IPS
+#- IMPORT CORAZA WAF
+############################################
+http://YOURWEBSITE.COM {
+    import block_ips
+    import cf_only         # defines @from_cf matcher
+    # 1️⃣ traffic that *arrives from Cloudflare* → OK
+    handle @from_cf {
+        import waf
         reverse_proxy http://IP:PORT {
             import cf_headers
         }
