@@ -5,6 +5,9 @@
     email YOUREMAIL@EMAIL.com
     auto_https disable_redirects
 
+    # CRITICAL: Coraza must inspect traffic before routing
+    order coraza_waf first
+
     # Trust ONLY Cloudflare's proxies, then read CF-Connecting-IP (NEEDED FOR JWT AUTH)
     servers {
         import /etc/caddy/snippets/trusted_proxies.caddy
@@ -27,8 +30,22 @@ import /etc/caddy/snippets/deny_ips.caddy
 }
 
 (waf) {
-    coraza {
-        ruleset /etc/caddy/coraza.conf
+    coraza_waf {
+        load_owasp_crs
+        directives `
+            # 1. Load the recommended engine configuration
+            Include @coraza.conf-recommended
+            
+            # 2. Load the OWASP CRS setup file
+            Include @crs-setup.conf.example
+            
+            # 3. Load all the OWASP security rules
+            Include @owasp_crs/*.conf
+            
+            # 4. Set to 'DetectionOnly' for testing. 
+            #    Change to 'On' when you are ready to block hackers.
+            SecRuleEngine On
+        `
     }
 }
 
