@@ -138,9 +138,21 @@ http://unifi.YOURWEBSITE.COM {
     import auth_admin
     reverse_proxy https://IP:8443 {
         import cf_headers
+
+        # Headers for UniFi
         header_up -Authorization
+        header_up Host {http.request.host}
+        header_up X-Forwarded-Host {http.request.host}
+        header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+        header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+        header_up X-Forwarded-Proto {scheme}
         header_up Upgrade {http.request.header.Upgrade}
         header_up Connection {http.request.header.Connection}
+
+        # Clean Headers
+        header_down -Server
+        header_down -X-Powered-By
+
         transport http {
             tls_insecure_skip_verify
         }
